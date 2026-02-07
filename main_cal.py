@@ -55,6 +55,10 @@ def setup_args():
 def f_e_metric(accuracy, earliness):
     return 2 * ((1 - earliness) * accuracy) / ((1 - earliness) + accuracy + 1e-8)
 
+def harmonic_mean_f1_earliness(f1, earliness):
+    """HM = 2 * F1 * (1-EL) / (F1 + (1-EL)) — same as all other baselines"""
+    return 2 * ((1 - earliness) * f1) / ((1 - earliness) + f1 + 1e-8)
+
 if __name__ == '__main__':
 
     args = setup_args()
@@ -195,7 +199,7 @@ if __name__ == '__main__':
         f1 = f1_score(y_test, y_pred, average='macro', zero_division=0)
         earliness = sum(stop_timestamps) / (X_test.shape[-1] * X_test.shape[0])
         cost = 1.0 - accuracy + args.delay_penalty * earliness
-        f_e = f_e_metric(accuracy, earliness)
+        f_e = harmonic_mean_f1_earliness(f1, earliness)
         
         # 추론 시간 통계
         mean_inference_time = np.mean(inference_times)

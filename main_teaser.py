@@ -179,7 +179,7 @@ def main():
         accuracy = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average='macro', zero_division=0)
         earliness = np.mean(earliness_vals)
-        f_e = 2 * (1 - earliness) * accuracy / ((1 - earliness) + accuracy) if ((1 - earliness) + accuracy) > 0 else 0
+        f_e = 2 * (1 - earliness) * f1 / ((1 - earliness) + f1 + 1e-8) if ((1 - earliness) + f1) > 0 else 0
         
         inference_time_ms = (inference_time / len(X_test)) * 1000  # ms per sample
         throughput_sps = len(X_test) / inference_time if inference_time > 0 else 0

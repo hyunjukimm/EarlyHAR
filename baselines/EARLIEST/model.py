@@ -68,13 +68,15 @@ class EARLIEST(nn.Module):
         self.decoder.bias.data.zero_()
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def initHidden(self, bsz):
-        """Initialize hidden states"""
+    def initHidden(self, bsz, device=None):
+        """Initialize hidden states on same device as model"""
+        if device is None:
+            device = next(self.parameters()).device
         if self.rnn_cell == "LSTM":
-            return (torch.zeros(self.nlayers, bsz, self.nhid),
-                    torch.zeros(self.nlayers, bsz, self.nhid))
+            return (torch.zeros(self.nlayers, bsz, self.nhid, device=device),
+                    torch.zeros(self.nlayers, bsz, self.nhid, device=device))
         else:
-            return torch.zeros(self.nlayers, bsz, self.nhid)
+            return torch.zeros(self.nlayers, bsz, self.nhid, device=device)
 
     def forward(self, X, epoch=0, test=False):
         """Compute halting points and predictions"""
@@ -84,14 +86,15 @@ class EARLIEST(nn.Module):
             self.Controller._epsilon = self._epsilon # set explore/exploit trade-off
             # epsilon -> give a exploration 
 
+        dev = X.device
         T, B, V = X.shape # Assume input is of shape (TIMESTEPS x BATCH x VARIABLES)
         baselines = [] # Predicted baselines
         actions = [] # Which classes to halt at each step
         log_pi = [] # Log probability of chosen actions
         halt_probs = []
-        halt_points = -torch.ones((B, self.nclasses))
-        hidden = self.initHidden(X.shape[1])
-        predictions = torch.zeros((B, self.nclasses), requires_grad=True)
+        halt_points = -torch.ones((B, self.nclasses), device=dev)
+        hidden = self.initHidden(X.shape[1], dev)
+        predictions = torch.zeros((B, self.nclasses), requires_grad=True, device=dev)
         all_preds = []
 
         # --- for each timestep, select a set of actions ---
@@ -103,11 +106,12 @@ class EARLIEST(nn.Module):
             #print("2", x.shape) 
 
             # predict logits for all elements in the batch
-            logits = self.out(output.squeeze())
+            out_last = output[-1:]  # (1, B, nhid)
+            logits = self.out(out_last.squeeze(0))
 
             # compute halting probability and sample an action
-            time = torch.tensor([t], dtype=torch.float, requires_grad=False).view(1, 1, 1).repeat(1, B, 1)
-            c_in = torch.cat((output, time), dim=2).detach()
+            time = torch.tensor([t], dtype=torch.float, requires_grad=False, device=dev).view(1, 1, 1).repeat(1, B, 1)
+            c_in = torch.cat((out_last, time), dim=2).detach()
             a_t, p_t, w_t = self.Controller(c_in)
 
             # If a_t == 1 and this class hasn't been halted, save its logits
@@ -117,7 +121,7 @@ class EARLIEST(nn.Module):
             halt_points = torch.where((halt_points == -1) & (a_t == 1), time.squeeze(0), halt_points)
 
             # compute baseline
-            b_t = self.BaselineNetwork(torch.cat((output, time), dim=2).detach())
+            b_t = self.BaselineNetwork(torch.cat((out_last, time), dim=2).detach())
 
             actions.append(a_t.squeeze())
             baselines.append(b_t.squeeze())
@@ -129,7 +133,7 @@ class EARLIEST(nn.Module):
         # If one element in the batch has not been halting, use its final prediction
         logits = torch.where(predictions == 0.0, logits, predictions).squeeze()
         halt_points = torch.where(halt_points == -1, time, halt_points).squeeze(0)
-        self.locations = np.array(halt_points + 1)
+        self.locations = np.array((halt_points + 1).cpu())
         self.baselines = torch.stack(baselines).squeeze(1).transpose(0, 1)
         self.log_pi = torch.stack(log_pi).squeeze(1).squeeze(2).transpose(0, 1)
         self.halt_probs = torch.stack(halt_probs).transpose(0, 1).squeeze(2)
@@ -161,8 +165,8 @@ class EARLIEST(nn.Module):
         self.loss_r = (-self.log_pi*self.adjusted_reward).sum()/self.log_pi.shape[1] # RL loss
         self.loss_c = CE(logits, y) # Classification loss
         self.wait_penalty = self.halt_probs.sum(1).mean() # Penalize late predictions
-        self.lam = torch.tensor([self.lam], dtype=torch.float, requires_grad=False)
-        loss = self.loss_r + self.loss_b + self.loss_c + self.lam*(self.wait_penalty)
+        lam_val = torch.tensor(self.lam, dtype=torch.float, requires_grad=False, device=logits.device)
+        loss = self.loss_r + self.loss_b + self.loss_c + lam_val*(self.wait_penalty)
         # It can help to add a larger weight to self.loss_c so early training
         # focuses on classification: ... + 10*self.loss_c + ...
         return loss
