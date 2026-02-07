@@ -14,47 +14,25 @@ from data_preprocessing.openpack_preprocess import openpackLoader
 
 import logging
 
-def combine_train_val(train_loader, val_loader, batch_size, shuffle=True, padding_type='mean'):
-
-    train_tensors, train_labels = zip(*[(x, y) for x, y in train_loader.dataset])
-    val_tensors, val_labels = zip(*[(x, y) for x, y in val_loader.dataset])
-
-    all_sequences = list(train_tensors) + list(val_tensors)
-    all_labels = list(train_labels) + list(val_labels)
-
-    padded_tensor, _ = pad_sequences(all_sequences, padding_type)
-    label_tensor = torch.tensor(all_labels, dtype=torch.long)
-
-    dataset = TensorDataset(padded_tensor, label_tensor)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-
-def split_and_save_kfold_data(sequences, labels, k, output_dir, prefix="fold"):
-    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
-    os.makedirs(output_dir, exist_ok=True)
-
-    for fold_idx, (train_index, test_index) in enumerate(skf.split(sequences, labels)):
-        train_data = [sequences[i] for i in train_index]
-        test_data = [sequences[i] for i in test_index]
-        train_labels = labels[train_index]
-        test_labels = labels[test_index]
-
-        fold_data = {
-            'train_data': train_data,
-            'train_labels': train_labels,
-            'test_data': test_data,
-            'test_labels': test_labels,
-        }
-
-        with open(os.path.join(output_dir, f"{prefix}_{fold_idx}.pkl"), "wb") as f:
-            pickle.dump(fold_data, f)
-
-        logging.info(f"[Fold {fold_idx}] Saved: {len(train_data)} train / {len(test_data)} test")
-
-    logging.info(f"[KFold Split] {k} folds saved to {output_dir}")
-
-    
+# ========== Main Functions ==========
 
 def prepare_kfold_datasets(args):
+    """
+    Prepare K-Fold cross-validation datasets from raw data.
+    
+    Steps:
+        1. Load dataset using appropriate loader
+        2. Filter by minimum sample count per class
+        3. Normalize and relabel
+        4. Split into K folds and save to disk
+        5. Save metadata (label_map, input_channels)
+    
+    Args:
+        args: Arguments containing dataset name, timespan, min_seq, k_fold, etc.
+    
+    Returns:
+        tuple: (label_map, input_channels)
+    """
     # 1. Load dataset
     if args.dataset == 'doore':
         dataset_list = dooreLoader('data/doore/*.csv', timespan=args.timespan, min_seq=args.min_seq)
@@ -113,8 +91,26 @@ def prepare_kfold_datasets(args):
         }, f)    
 
     return label_map, normalized_seqs[0].shape[1]
-    
+
 def load_fold_data(fold_path, args, mode='train'):
+    """
+    Load a specific fold from saved pickle file and prepare DataLoaders.
+    
+    Steps:
+        1. Load fold data (train/test split)
+        2. Split validation from training set
+        3. Apply augmentation (training only)
+        4. Apply padding to all sets
+        5. Create PyTorch DataLoaders
+    
+    Args:
+        fold_path: Path to fold pickle file
+        args: Arguments containing batch_size, padding, augment settings
+        mode: 'train' or 'test' (augmentation only applied in train mode)
+    
+    Returns:
+        tuple: (train_loader, val_loader, test_loader)
+    """
     # Load fold data from saved pickle file
     with open(fold_path, "rb") as f:
         fold_data = pickle.load(f)
@@ -144,7 +140,7 @@ def load_fold_data(fold_path, args, mode='train'):
     val_tensor, val_lengths = pad_sequences(val_data, padding_type=args.padding)
     test_tensor, test_lengths = pad_sequences(test_data, padding_type=args.padding)
 
-    print("train", train_tensor.shape)
+    logging.info(f"[Train] Tensor shape: {train_tensor.shape}")
     # Construct DataLoaders
     train_loader = DataLoader(TensorDataset(train_tensor, train_labels), batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(TensorDataset(val_tensor, val_labels), batch_size=args.batch_size)
@@ -154,9 +150,66 @@ def load_fold_data(fold_path, args, mode='train'):
 
     return train_loader, val_loader, test_loader
 
-def _print_class_stats(labels_tensor, length_list):
-    label_counts = Counter(labels_tensor.tolist())
-    for label in sorted(label_counts.keys()):
-        seq_count = label_counts[label]
-        total_points = sum(length for lbl, length in zip(labels_tensor.tolist(), length_list) if lbl == label)
-        print(f"  Class {label}: {seq_count} sequences, {total_points} data points")
+# ========== Helper Functions ==========
+
+def split_and_save_kfold_data(sequences, labels, k, output_dir, prefix="fold"):
+    """
+    Split data into K folds using Stratified K-Fold and save each fold to disk.
+    
+    Args:
+        sequences: List of normalized sequences
+        labels: Tensor of labels
+        k: Number of folds
+        output_dir: Directory to save fold files
+        prefix: Filename prefix (default: "fold")
+    """
+    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
+    os.makedirs(output_dir, exist_ok=True)
+
+    for fold_idx, (train_index, test_index) in enumerate(skf.split(sequences, labels)):
+        train_data = [sequences[i] for i in train_index]
+        test_data = [sequences[i] for i in test_index]
+        train_labels = labels[train_index]
+        test_labels = labels[test_index]
+
+        fold_data = {
+            'train_data': train_data,
+            'train_labels': train_labels,
+            'test_data': test_data,
+            'test_labels': test_labels,
+        }
+
+        with open(os.path.join(output_dir, f"{prefix}_{fold_idx}.pkl"), "wb") as f:
+            pickle.dump(fold_data, f)
+
+        logging.info(f"[Fold {fold_idx}] Saved: {len(train_data)} train / {len(test_data)} test")
+
+    logging.info(f"[KFold Split] {k} folds saved to {output_dir}")
+
+def combine_train_val(train_loader, val_loader, batch_size, shuffle=True, padding_type='mean'):
+    """
+    Combine train and validation loaders into a single loader for final retraining.
+    
+    Used during the final model training phase to maximize training data.
+    
+    Args:
+        train_loader: Training data loader
+        val_loader: Validation data loader
+        batch_size: Batch size for combined loader
+        shuffle: Whether to shuffle combined data
+        padding_type: Padding type for sequences ('mean' or 'max')
+    
+    Returns:
+        DataLoader: Combined train+val data loader
+    """
+    train_tensors, train_labels = zip(*[(x, y) for x, y in train_loader.dataset])
+    val_tensors, val_labels = zip(*[(x, y) for x, y in val_loader.dataset])
+
+    all_sequences = list(train_tensors) + list(val_tensors)
+    all_labels = list(train_labels) + list(val_labels)
+
+    padded_tensor, _ = pad_sequences(all_sequences, padding_type)
+    label_tensor = torch.tensor(all_labels, dtype=torch.long)
+
+    dataset = TensorDataset(padded_tensor, label_tensor)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)

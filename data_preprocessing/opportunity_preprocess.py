@@ -2,14 +2,8 @@ from glob import glob
 import numpy as np
 import pandas as pd
 from collections import Counter
-
 import logging
-
-class TSDataSet:
-    def __init__(self, data, label, length):
-        self.data = data
-        self.label = int(label)
-        self.length = int(length)
+from .dataset import TSDataSet
 
 # Opportunity data format: sensor type + context name ..., activity label (ADL)
 # File name: each user (4) * 5
@@ -18,17 +12,30 @@ class TSDataSet:
 # Activity numbers: [1, 3, 2, 5, 4]
 # Activity counts:  [40, 20, 20, 20, 20]
 def opportunityLoader(file_name_pattern, timespan, min_seq):
+    """
+    Loader for Opportunity dataset with timespan-based averaging.
+    
+    Processes wearable sensor data (242 channels) from IMUs and accelerometers.
+    Extracts high-level activities (101-105) and applies sliding window averaging
+    over timespan to downsample high-frequency sensor readings.
+    
+    Args:
+        file_name_pattern: Glob pattern for .dat files.
+        timespan: Time window (milliseconds) for averaging sensor readings.
+        min_seq: Minimum sequence length after averaging.
+    
+    Returns:
+        List of TSDataSet objects with averaged sensor data [seq_len, 242].
+    """
+
     logging.info("Loading Opportunity Dataset (Averaging over timespan) ---------------------")
 
     # Initialization
-    file_list = []           # List to store file names
     dataset_list = []        # Output list of TSDataSet objects
     total_raw_pointers = 0   # Total number of raw data rows before averaging
 
     # Extract and sort file names
-    for x in glob(file_name_pattern):
-        file_list.append(x)
-    file_list.sort()
+    file_list = sorted(glob(file_name_pattern))
 
     # For each file
     for file_path in file_list:
@@ -52,20 +59,20 @@ def opportunityLoader(file_name_pattern, timespan, min_seq):
                 row_label = temp_df[i, 244]
                 row_sensor = temp_df[i, 1:243]
 
-                # Within the same timespan
+                # Continue accumulating if within same timespan AND same activity
                 if (row_time - current_time) < timespan and row_label == current_label:
                     # Accumulate sensor data in buffer
                     temp_buffer.append(row_sensor)
                 else:
-                    # Compute average for current timespan window
+                    # End current window: compute average and add to sequence
                     avg_vector = np.mean(temp_buffer, axis=0)
                     averaged_sequence.append(avg_vector)
 
-                    # Reset buffer
+                    # Reset buffer for next window
                     temp_buffer = [row_sensor]
                     current_time = row_time
 
-                    # If the activity label has changed
+                    # Check if activity label has changed
                     if row_label != current_label:
                         # Construct TSDataSet object for the previous activity
                         if len(averaged_sequence) >= min_seq:
@@ -89,12 +96,14 @@ def opportunityLoader(file_name_pattern, timespan, min_seq):
     label_list = [seq.label for seq in dataset_list]
     activity_counts = Counter(label_list)
     num_activity_types = len(activity_counts)
+    total_sequences = len(dataset_list)
 
     logging.info("Loading Opportunity Dataset Finished --------------------------------------")
     logging.info("====== Dataset Summary ======")
     logging.info(f"Sensor channels: {sensor_channels}")
     logging.info(f"Raw data points (before averaging): {total_raw_pointers}")
-    logging.info(f"Averaged data points (after averaging): {total_averaged_pointers}")
+    logging.info(f"Total data points (after averaging): {total_averaged_pointers}")
+    logging.info(f"Total activities (sequences): {total_sequences}")
     logging.info(f"Number of activity types: {num_activity_types}")
     logging.info("Activity sequence counts and data points:")
     for label in sorted(activity_counts.keys()):

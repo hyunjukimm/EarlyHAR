@@ -11,7 +11,7 @@ class CALIMERA:
         self.delay_penalty = delay_penalty
 
     def _generate_timestamps(max_timestamp):
-        NUM_TIMESTAMPS = 20
+        NUM_TIMESTAMPS = 10  # 20 → 10: 학습 시간 50% 감소
         num_intervals_between_timestamps = min(NUM_TIMESTAMPS-1, max_timestamp)
         step = max_timestamp // num_intervals_between_timestamps
         timestamps = np.arange(max(2, step), max_timestamp+step, step).astype(np.int32)

@@ -24,15 +24,17 @@ class HaltingPolicy(nn.Module):
         self.hopNet = createNet(ninp, 1, n_layers=1, n_units=20)
         self.BaselineNetwork = createNet(ninp, 1)
     
-    def initLoggers(self):
+    def initLoggers(self, device=None):
+        if device is None:
+            device = next(self.parameters()).device if hasattr(self, 'parameters') else torch.device('cpu')
         self.log_pi_stop = []
         self.log_pi_hop = []
         self.halt_decisions = []
         self.wait_probs = []
         self.halting_steps = []
         self.baselines = []
-        self.halt_points = -torch.ones((self.B))
-        self.grad_mask = torch.ones((self.B), requires_grad=False)
+        self.halt_points = -torch.ones((self.B), device=device)
+        self.grad_mask = torch.ones((self.B), requires_grad=False, device=device)
         self.grad_masks = []
         self.allowable_actions = []
          
@@ -49,11 +51,13 @@ class HaltingPolicy(nn.Module):
         binary vector called "self.checkvec" to make this process work.
         """
         # --- choose whether or not to stop ---
+        device = x.device
+        B = x.shape[0]  # Get actual batch size
         v = (t == self.checkvec).long() # Tells us which batch items are ready to go: If 1, allowed to stop
         action, log_pi_stop, wait_probs = self.stopPolicy(x) # Action is an integer
         stop = (action == 0).long().unsqueeze(1)
         stop = v*stop
-        grad_mask = torch.where(halt_points > 0.0, torch.zeros((self.B)), torch.ones((self.B))).detach() # for time series that have already been halted, mask out the gradients with 0s
+        grad_mask = torch.where(halt_points > 0.0, torch.zeros((B), device=device), torch.ones((B), device=device)).detach() # for time series that have already been halted, mask out the gradients with 0s
         self.grad_masks.append(grad_mask)
         self.wait_probs.append(wait_probs)
         self.log_pi_stop.append(log_pi_stop)
@@ -84,9 +88,9 @@ class HaltingPolicy(nn.Module):
         """
         probs = torch.softmax(self.stopNet(x), dim=1)
         wait_probs = -torch.log(probs[:, 0]) # compute log probs of not-halt = wait
-        probs = (1.0-self._eps)*probs + (self._eps)*torch.FloatTensor([0.05]) # Explore/exploit (can't be 0)
-        action = probs.multinomial(num_samples=1).squeeze()
-        log_pi = torch.gather(torch.log(probs), 1, action.unsqueeze(1)).squeeze()
+        probs = (1.0-self._eps)*probs + (self._eps)*torch.tensor([0.05], device=x.device, dtype=probs.dtype) # Explore/exploit (can't be 0)
+        action = probs.multinomial(num_samples=1).squeeze(1)
+        log_pi = torch.gather(torch.log(probs), 1, action.unsqueeze(1)).squeeze(1)
         return action, log_pi, wait_probs
     
     def hopPolicy(self, x):

@@ -19,7 +19,7 @@ def computeAUC(predictions, labels):
     return roc_auc_score(y_onehot_test, predictions,  multi_class= 'ovo', average="macro")
 
 def computeF1(predictions, labels):
-    return f1_score(labels, predictions, average='weighted')
+    return f1_score(labels, predictions, average='macro')
 
 
 def computeACC(predictions, labels):

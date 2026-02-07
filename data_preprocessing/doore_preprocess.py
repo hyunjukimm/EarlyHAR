@@ -2,14 +2,8 @@ from glob import glob
 import numpy as np
 import pandas as pd
 from collections import Counter
-
 import logging
-
-class TSDataSet:
-    def __init__(self, data, label, length):
-        self.data = data
-        self.label = int(label)
-        self.length = int(length)
+from .dataset import TSDataSet
 
 # Map file name to activity label number
 # Activity label mapping: [1: 'Chatting', 2: 'Discussion', 3: 'GroupStudy', 4: 'Presentation', 5: 'NULL']
@@ -61,7 +55,7 @@ def dooreLoader(file_name_pattern, timespan, min_seq):
         temp_dataset = np.zeros((seq_length, len(sensor_list)))  # Initialize empty time-series array
 
         # If activity duration is sufficiently long
-        if seq_length > min_seq:
+        if seq_length >= min_seq:
             # For each row in the file
             for row in df:
                 sensor_type, state, row_start, row_end = row[0], int(row[1]), row[2], row[3]
@@ -74,7 +68,8 @@ def dooreLoader(file_name_pattern, timespan, min_seq):
                 end_idx = int((row_end - start_time) / timespan)
 
                 # Fill in sensor data over the corresponding timestamps
-                for t in range(start_idx, end_idx):
+                # Include end_idx to cover the full sensor activation period
+                for t in range(start_idx, end_idx + 1):
                     if 0 <= t < seq_length:
                         if sensor_type in ['Sound', 'Brightness']:  # Environment-driven sensors
                             temp_dataset[t][sensor_idx] = state % 10
@@ -91,11 +86,13 @@ def dooreLoader(file_name_pattern, timespan, min_seq):
     label_list = [ds.label for ds in dataset_list]
     activity_counts = Counter(label_list)
     num_activity_types = len(activity_counts)
+    total_sequences = len(dataset_list)
     
     logging.info("Loading Doore Dataset Finished --------------------------------------")
     logging.info("====== Dataset Summary ======")
     logging.info(f"Sensor channels: {sensor_channels}")
-    logging.info(f"Total timestamps (data points): {total_timestamps}")
+    logging.info(f"Total data points (timestamps): {total_timestamps}")
+    logging.info(f"Total activities (sequences): {total_sequences}")
     logging.info(f"Number of activity types: {num_activity_types}")
     logging.info("Activity sequence counts and data points:")
     for label in sorted(activity_counts.keys()):

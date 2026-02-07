@@ -4,9 +4,7 @@ import pandas as pd
 import torch.nn.functional as F
 from collections import Counter
 import random
-
-import numpy as np
-import pandas as pd
+import logging
 
 def normalize_and_check(sequence_list, remove_zero_std=True, clip_value=None):
     """
@@ -26,7 +24,7 @@ def normalize_and_check(sequence_list, remove_zero_std=True, clip_value=None):
 
     # 2. NaN handling: replace NaN with column mean
     if df.isnull().any().any():
-        print("NaN detected — replacing with column mean.")
+        logging.warning("NaN detected — replacing with 0.")
         df = df.fillna(0)
 
     # 3. Remove or protect zero-std columns
@@ -116,7 +114,7 @@ def balance_by_augmentation(sequence_list, label_list, method='noise', target_co
     for label in sorted(set(label_list)):
         idxs = [i for i, lbl in enumerate(label_list) if lbl == label]
         samples_needed = max_count - len(idxs)
-        print(samples_needed, "sample needed")
+        logging.info(f"[Augment] Class {label}: {samples_needed} samples needed")
         # Original sequences
         for idx in idxs:
             tensor_seq = torch.tensor(sequence_list[idx], dtype=torch.float32)

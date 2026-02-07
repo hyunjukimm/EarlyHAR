@@ -35,8 +35,6 @@ class SyntheticTimeSeries(Dataset):
         labels = torch.tensor(np.array(y).astype(np.int32), dtype=torch.long)
         signal_locs = torch.tensor(np.asarray(self.signal_locs),
                                    dtype=torch.float)
-        print("data", data.shape)
-        print("labels", labels.shape)
         return data, labels, signal_locs
 
 class CustomizedTimeSeries(Dataset):
@@ -73,6 +71,4 @@ class CustomizedTimeSeries(Dataset):
         labels = torch.tensor(np.array(y).astype(np.int32), dtype=torch.long)
         signal_locs = torch.tensor(np.asarray(self.signal_locs),
                                    dtype=torch.float)
-        print("data", data.shape)
-        print("labels", labels.shape)
         return data, labels, signal_locs

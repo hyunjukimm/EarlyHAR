@@ -5,16 +5,28 @@ from collections import Counter
 import os
 import re
 import logging
+from .dataset import TSDataSet
 
-class TSDataSet:
-    def __init__(self, data, label, length, user_id):
-        self.data = data
-        self.label = int(label)
-        self.length = int(length)
-        self.user_id = int(user_id)
-
-# Loader for OpenPack dataset with summary
-def openpackLoader(file_name_pattern, timespan, min_seq, count_num=20):
+def openpackLoader(file_name_pattern, timespan, min_seq):
+    """
+    Load and preprocess OpenPack dataset from CSV files.
+    
+    The OpenPack dataset contains wearable IMU sensor data from 4 activity trackers (atr).
+    Each file is named U{user_id}-S{session_id}.csv with 41 sensor channels 
+    (acc_xyz, gyro_xyz, quat_xyzw for each atr) and activity labels (0-10).
+    
+    Args:
+        file_name_pattern (str): Glob pattern to match OpenPack CSV files (e.g., "data/openpack/U*-S*.csv")
+        timespan (int): Sampling interval in milliseconds to reduce temporal resolution
+        min_seq (int): Minimum sequence length to keep (shorter sequences are discarded)
+    
+    Returns:
+        list: List of TSDataSet objects, each containing:
+            - data: numpy array of shape (seq_len, 41) with sensor readings
+            - label: activity label (0-9, label 10 is filtered out)
+            - length: sequence length
+            - user_id: user identifier extracted from filename
+    """
     logging.info("Loading OpenPack Dataset --------------------------------------")
 
     file_list = sorted(glob(file_name_pattern))
@@ -48,11 +60,11 @@ def openpackLoader(file_name_pattern, timespan, min_seq, count_num=20):
         if len(df) > 0:
             total_raw_pointers += len(df)
 
-            current_label = df[1, 1]
-            current_time = df[1, 0]
-            temp_dataset = [df[1, 2:43]]
+            current_label = df[0, 1]
+            current_time = df[0, 0]
+            temp_dataset = [df[0, 2:43]]
 
-            for i in range(2, len(df)):
+            for i in range(1, len(df)):
                 row_time = df[i, 0]
                 row_label = df[i, 1]
                 row_sensor = df[i, 2:43]
@@ -82,7 +94,7 @@ def openpackLoader(file_name_pattern, timespan, min_seq, count_num=20):
     num_activity_types = len(activity_counts)
     total_sequences = len(dataset_list)
 
-    logging.info("User id:", id_list)
+    logging.info(f"User id: {id_list}")
     logging.info("Loading OpenPack Dataset Finished --------------------------------------")
     logging.info("====== Dataset Summary ======")
     logging.info(f"Sensor channels: {sensor_channels}")

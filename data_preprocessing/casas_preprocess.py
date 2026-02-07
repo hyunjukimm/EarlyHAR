@@ -3,12 +3,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 import logging
-
-class TSDataSet:
-    def __init__(self, data, label, length):
-        self.data = data
-        self.label = int(label)
-        self.length = int(length)
+from .dataset import TSDataSet
 
 # Loader for CASAS dataset (no timespan used)
 # CASAS data format: timestamp, sensor type+context name, state, user #, activity label [1–15]
@@ -54,23 +49,35 @@ def casasLoader(file_name_pattern, min_seq):
                         else:
                             current_label = int(temp_list[4])
 
-                        activity_list[sensor_list.index(df[i, 2])] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        sensor_name = df[i, 2]
+                        if sensor_name in sensor_list:
+                            activity_list[sensor_list.index(sensor_name)] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        else:
+                            logging.warning(f"Unknown sensor: {sensor_name}")
                         temp_dataset = np.array([activity_list])
 
                     # Continuing the same activity
                     if (int(temp_list[2]) == current_label) or \
                        (len(temp_list) > 3 and int(temp_list[4]) == current_label):
-                        activity_list[sensor_list.index(df[i, 2])] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        sensor_name = df[i, 2]
+                        if sensor_name in sensor_list:
+                            activity_list[sensor_list.index(sensor_name)] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        else:
+                            logging.warning(f"Unknown sensor: {sensor_name}")
                         temp_dataset = np.concatenate((temp_dataset, [activity_list]), axis=0)
 
                     # Activity changed
                     else:
-                        if len(temp_dataset) > min_seq:
+                        if len(temp_dataset) >= min_seq:
                             dataset_list.append(TSDataSet(temp_dataset, current_label, len(temp_dataset)))
                             total_data_pointers += len(temp_dataset)
 
                         activity_list = np.zeros(len(sensor_list))
-                        activity_list[sensor_list.index(df[i, 2])] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        sensor_name = df[i, 2]
+                        if sensor_name in sensor_list:
+                            activity_list[sensor_list.index(sensor_name)] = 1 if temp_list[0] in ['ON', 'OPEN', 'PRESENT'] else 0
+                        else:
+                            logging.warning(f"Unknown sensor: {sensor_name}")
                         temp_dataset = np.array([activity_list])
 
                         if int(temp_list[1]) - 1 == rid:
@@ -79,7 +86,7 @@ def casasLoader(file_name_pattern, min_seq):
                             current_label = int(temp_list[4])
 
             # Final activity segment
-            if len(temp_dataset) > min_seq:
+            if len(temp_dataset) >= min_seq:
                 dataset_list.append(TSDataSet(temp_dataset, current_label, len(temp_dataset)))
                 total_data_pointers += len(temp_dataset)
 
