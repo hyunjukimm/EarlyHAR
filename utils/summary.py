@@ -171,7 +171,8 @@ def plot_two_class_accuracy_by_change(dataset_name, csv_path, best_hm, save_path
 
         label = label_names.get(cls, f"Class {cls}")
         color_key = 'min' if cls == min_diff_class else 'max'
-        line_obj, = plt.plot(steps, acc_mean, label=f"{label} (Δ={diffs[cls]:.2f})", color=colors[color_key])
+        #line_obj, = plt.plot(steps, acc_mean, label=f"{label} (Δ={diffs[cls]:.2f})", color=colors[color_key])
+        line_obj, = plt.plot(steps, acc_mean, label=f"{label}", color=colors[color_key])
         plt.fill_between(steps, acc_mean - acc_std, acc_mean + acc_std, alpha=0.2, color=colors[color_key])
         plt.axvline(x=best_step, linestyle='--', linewidth=2, color=colors[color_key], alpha=0.7)
     # Draw vertical line for best overall HM step
@@ -179,7 +180,8 @@ def plot_two_class_accuracy_by_change(dataset_name, csv_path, best_hm, save_path
 
     plt.xlabel("Time Step (%)", fontsize=24)
     plt.ylabel("Accuracy", fontsize=24)
-    plt.legend(title="Activity (Δ Accuracy Difference)", fontsize=22, title_fontsize=22)
+    #plt.legend(title="Activity (Δ Accuracy Difference)", fontsize=22, title_fontsize=22)
+    plt.legend(fontsize=24)
     plt.tick_params(axis='both', labelsize=24)
     
     ax = plt.gca()

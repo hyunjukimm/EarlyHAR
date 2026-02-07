@@ -68,8 +68,8 @@ class StopAndHopPretrained(Model):
         prefix_embeddings, model_predictions, times = X
         B, T, V = prefix_embeddings.shape
         self.HaltingPolicy.initLoggers()
-        self.HaltingPolicy.checkvec = 0*torch.ones((B, 1))
-        self.HaltingPolicy.t_max = torch.ones((B))*T
+        self.HaltingPolicy.checkvec = 0*torch.ones((B, 1), device=prefix_embeddings.device)
+        self.HaltingPolicy.t_max = torch.ones(B, device=prefix_embeddings.device) * T
 
         predictions = -torch.ones((self.bsz, self._nclasses), requires_grad=True)
         halt_points = -torch.ones((self.bsz))
@@ -146,17 +146,18 @@ class StopAndHop(Model):
         vals = torch.tensor(data).clone().detach().permute(1, 0, 2)
         
         T, B, V = vals.shape
-        masks = torch.tensor(np.where(vals!= 0, 1, 0))
-        past = torch.zeros(T, B, V)
+        masks = torch.tensor(np.where(vals!= 0, 1, 0), device=vals.device, dtype=vals.dtype)
+        past = torch.zeros(T, B, V, device=vals.device)
 
+        self.HaltingPolicy.B = B
         self.HaltingPolicy.initLoggers()
-        self.HaltingPolicy.checkvec = 0*torch.ones((B, 1))
-        self.HaltingPolicy.t_max = torch.ones((B))*T
+        self.HaltingPolicy.checkvec = 0*torch.ones((B, 1), device=vals.device)
+        self.HaltingPolicy.t_max = torch.ones(B, device=vals.device) * T
 
-        h = torch.zeros(B, self.nhid) # Initialize hidden state as 0s
-        x_prime = torch.zeros(self._ninp) # Initialize estimated x values as 0s
-        predictions = -torch.ones((self.bsz, self._nclasses), requires_grad=True)
-        halt_points = -torch.ones((self.bsz))
+        h = torch.zeros(B, self.nhid).to(vals.device)
+        x_prime = torch.zeros(B, self._ninp).to(vals.device)
+        predictions = -torch.ones((B, self._nclasses), requires_grad=True).to(vals.device)
+        halt_points = -torch.ones(B).to(vals.device)
         t = 0
         while t < T:
             x, m, d = vals[t], masks[t], past[t] # extract values for current timestep

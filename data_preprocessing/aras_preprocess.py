@@ -28,6 +28,7 @@ def arasLoader(file_name_pattern, timespan, min_seq):
         current_time = 0                           # Reference time index
         current_data = df[0, 0:20]                 # Initial sensor data
         temp_dataset = np.array([current_data])    # Accumulate sensor readings
+        last_active_resident = 0                   # Track which resident's activity (0 or 1 index)
 
         for i in range(1, len(df)):
             # Accumulate data every `timespan` seconds
@@ -45,9 +46,13 @@ def arasLoader(file_name_pattern, timespan, min_seq):
                 else:
                     # Save the segment if long enough
                     if len(temp_dataset) >= min_seq:
-                        label_to_use = current_label[0] if current_label[0] != 0 else current_label[1]
+                        # Use the label of whichever resident changed their activity
+                        label_to_use = current_label[0] if current_label[0] != label_r1 else current_label[1]
                         dataset_list.append(TSDataSet(temp_dataset, label_to_use, len(temp_dataset)))
                         label_list.append(current_label)
+
+                    # Track which resident changed for the new segment
+                    last_active_resident = 0 if current_label[0] != label_r1 else 1
 
                     # Start a new segment
                     temp_dataset = np.array([sensor_data])
@@ -55,8 +60,9 @@ def arasLoader(file_name_pattern, timespan, min_seq):
                     current_data = sensor_data
 
         # Save the last segment
+        # Use the label of the resident who last changed activity
         if len(temp_dataset) >= min_seq:
-            label_to_use = current_label[0] if current_label[0] != 0 else current_label[1]
+            label_to_use = current_label[last_active_resident]
             dataset_list.append(TSDataSet(temp_dataset, label_to_use, len(temp_dataset)))
             label_list.append(current_label)
 

@@ -50,7 +50,7 @@ def setup_args():
     parser.add_argument('--classifier_hidden', type=int, default=64)
 
     # --- Training Arguments ---
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--train_epochs', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=3e-4)
     parser.add_argument('--early_stop', type=bool, default=True)
@@ -237,13 +237,15 @@ def main():
     if args.mode == 'test':
         logging.info("=== Final Evaluation Summary ===")
         print_kfold_summary(fold_metrics, early_acc_by_step)
-        save_kfold_summary_to_csv(
+        best_hm, mean_best_hm = save_kfold_summary_to_csv(
             args.dataset,
             fold_metrics,
             early_acc_by_step,
             early_acc_by_fold,
             early_classwise_acc_by_fold  
         )
+        logging.info(f"Best HM: {best_hm}")
+        logging.info(f"Mean Best HM: {mean_best_hm}")
 
 if __name__ == '__main__':
     main()

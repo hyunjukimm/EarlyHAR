@@ -36,7 +36,5 @@ class Controller(nn.Module):
         probs = (1-self._epsilon)*probs + self._epsilon*torch.FloatTensor([0.05])  # Explore/exploit
         m = Bernoulli(probs=probs)
         action = m.sample() # sample an action
-        # print(action)
-        print("action", action.shape)
         log_pi = m.log_prob(action) # compute log probability of sampled action
         return action.squeeze(0), log_pi.squeeze(0), -torch.log(probs).squeeze(0)

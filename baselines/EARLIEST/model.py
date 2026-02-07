@@ -42,6 +42,7 @@ class EARLIEST(nn.Module):
         self.nhid = args.nhid
         self.nlayers = args.nlayers
         self.lam = args.lam
+        self._epsilon = getattr(args, "_epsilon", 0.1)
 
         # --- Sub-networks ---
         self.Controller = Controller(self.nhid+1, 1)
@@ -97,9 +98,7 @@ class EARLIEST(nn.Module):
         for t in range(1, T):
             # run Base RNN on new data at step t
             x = X[:t]#.unsqueeze(0) # Chop off current timesteps #[t, batch, variables]
-            print("1", t, x.shape)
             output, hidden = self.RNN(x, hidden)
-            print("output", output.shape)
             x = X[t] # [batch, variables]
             #print("2", x.shape) 
 
@@ -108,10 +107,7 @@ class EARLIEST(nn.Module):
 
             # compute halting probability and sample an action
             time = torch.tensor([t], dtype=torch.float, requires_grad=False).view(1, 1, 1).repeat(1, B, 1)
-            print("time", time.shape)
             c_in = torch.cat((output, time), dim=2).detach()
-            # A network that chooses whether or not enough information
-            print('c_in', c_in.shape,c_in)
             a_t, p_t, w_t = self.Controller(c_in)
 
             # If a_t == 1 and this class hasn't been halted, save its logits
